@@ -38,6 +38,7 @@ uint8_t actMin = 0;
 uint8_t prevMin = 63;
 int lightBarValue = 0;
 boolean lightBarState = false;
+boolean lightBarDirection = false; //(false is dark to light, true is light to dark) 
 
 // IMPORTANT: To reduce NeoPixel burnout risk, add 1000 uF capacitor across
 // pixel power leads, add 300 - 500 Ohm resistor on first pixel's data input
@@ -175,7 +176,7 @@ void setup() {
 
   /* set alarm to default */
   alarm1Time = SECS_PER_HOUR * 10 + SECS_PER_MIN * 11;
-  alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
+  alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
   Alarm.disable(alarmID);
   AlarmOnOff = false;
   /* end alarm */
@@ -204,15 +205,7 @@ void setup() {
 void loop() {
   /* reset the watchdog */
   wdt_reset();
-/*
-  Serial.print(alarmState);
-  Serial.print(" ");
-  Serial.print(lightBarState);
-  Serial.print(" ");
 
-  Serial.println();
- 
-  */
   rotating = true;  // reset the debouncer
 
   Alarm.delay(0); // don't wait
@@ -243,7 +236,7 @@ void loop() {
     alarmState = false;
     lightBarOff();
     Alarm.free(alarmID);
-    alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
+    alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
     uView.invert(false);
   }
 
@@ -287,7 +280,7 @@ void loop() {
       lastaction = now();
       alarm1Time += SECS_PER_HOUR * encoderPos;
       Alarm.free(alarmID);
-      alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
+      alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
       encoderPos = 0;
       displayAdjust("Alarm","uur");
       displayAlarmLC();
@@ -296,7 +289,7 @@ void loop() {
       lastaction = now();
       alarm1Time += SECS_PER_MIN * encoderPos;
       Alarm.free(alarmID);
-      alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
+      alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
       encoderPos = 0;
       displayAdjust("Alarm","minuut");
       displayAlarmLC();
@@ -316,13 +309,10 @@ void loop() {
       displayAlarmLC();
       break;
     case return1up:
-      menuLevel = 0;
-      state = 0;
-      displayTime();
-      displayTimeLC();
-      lastaction = now();
     default:
       menuLevelState = 0;
+      menuLevel = 0;
+      state = 0;
       displayTime();
       displayTimeLC();
       lastaction = now();
@@ -342,24 +332,21 @@ void loop() {
       clockAdjust(state, SECS_PER_DAY * encoderPos);
       break;
     case clockAdjustMonth:
-      clockAdjust(state,  SECS_PER_DAY * daysInMonth() * encoderPos);
+      clockAdjust(state,  SECS_PER_DAY * (daysInMonth(month()) * encoderPos));
       break;
     case clockAdjustYear:
       clockAdjust(state, SECS_PER_YEAR * encoderPos);
       break;
     case return1up2:
+      RTC.set(now());
+    default:
+      menuLevelState = 0;
       menuLevel = 0;
       state = 0;
       displayTime();
       displayTimeLC();
       lastaction = now();
-      RTC.set(now());
-    default:
-      menuLevelState = 0;
-      displayTime();
-      displayTimeLC();
-      lastaction = now();
-    }
+    };
     break;
   default:
     displayTime();
@@ -389,9 +376,14 @@ void lightBar(bool lightBarState) {
     int actMin = second();
     if ( actMin != prevMin ) {
       prevMin = actMin;
-      if ( actMin % 10 == 0) {   //10
-        lightBarValue += 1;
+      if ( actMin % 10 == 0) {
+        if(lightBarDirection) {
+          lightBarValue++;
+        } else {
+          lightBarValue--;
+        }
         lightBarValue = min(lightBarValue, 255);
+        lightBarValue = max(lightBarValue,   0);
         red = (int)sqrt(lightBarValue - 1 ) * 16;
         green = 254 - (int)(sqrt(255-lightBarValue)*16);   // 256
         blue  = 252 - (int)(log10(256-lightBarValue)*105);  // 256
@@ -419,9 +411,10 @@ void lightBar(bool lightBarState) {
   strip.show();
 }
 
-void lightBarOn() {
+void lightBarUp() {
   lightBarState = true;
   lightBarValue = 0;
+  lightBarDirection = false;  
   uView.invert(true);
   Serial.print("v");
   Serial.print(17-mp3,BIN);
@@ -431,6 +424,12 @@ void lightBarOn() {
   Serial.println();
   mp3playing = true;
 }
+void lightBarDown() {
+  lightBarState = true;
+  lightBarValue = 255;
+  lightBarDirection = true;  
+}
+
 void lightBarOff() {
   lightBarState = false;
   lightBarValue = 0;
@@ -469,10 +468,13 @@ void doEncoderB() {
   }
 }
 
-long unsigned int daysInMonth() {
-  switch (month()) {
-    case (1):
-      return 31;
+long unsigned int daysInMonth(int monthToReturn ) {
+  switch (monthToReturn) {
+    case (4):
+    case (6):
+    case (9):
+    case (11):
+      return 30;
       break;
     case (2):
       if (year() / 4) {
@@ -481,36 +483,8 @@ long unsigned int daysInMonth() {
         return 28;
       }
       break;
-    case (3):
+    default:
       return 31;
-      break;
-    case (4):
-      return 30;
-      break;
-    case (5):
-      return 31;
-      break;
-    case (6):
-      return 30;
-      break;
-    case (7):
-      return 31;
-      break;
-    case (8):
-      return 31;
-      break;
-    case (9):
-      return 30;
-      break;
-    case (10):
-      return 31;
-      break;
-    case (11):
-      return 30;
-      break;
-    case (12):
-      return 31;
-      break;
   }
 }
 
@@ -526,8 +500,6 @@ void showMenuLevel0() {
   if ( encoderPosPrev != encoderPos ) {
     lastaction = now();
     encoderPosPrev = encoderPos;
-//    if ( encoderPos > menuTopSize ) { encoderPos = 0; };
-//    if ( encoderPos < 1 ) { encoderPos = menuTopSize; };
     encoderPos = constrain(encoderPos,0,menuTopSize);
     uint8_t st;
     uint8_t clrfg = 0;
