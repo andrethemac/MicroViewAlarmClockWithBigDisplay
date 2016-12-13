@@ -234,7 +234,7 @@ void loop() {
   if ( clockAlarmAdjust.released() ) {
     state++;
     encoderPos = 0;
-//    state %= menuSize;
+    state %= menuSize;
     menuLevel = menuLevelState;
     displayClear = !displayCleared;
     lastaction = now();
@@ -272,7 +272,7 @@ void loop() {
       displayTimeLC();
       break;
     case selectMenu:
-      showMenuLevel();
+      showMenuLevel0();
       break;
     default:
       state = 0;
@@ -514,7 +514,7 @@ long unsigned int daysInMonth() {
   }
 }
 
-void showMenuLevel() {
+void showMenuLevel0() {
   if ( displayClear != displayCleared ) {
     uView.clear(PAGE);
     uView.display();
@@ -532,7 +532,7 @@ void showMenuLevel() {
     uint8_t st;
     uint8_t clrfg = 0;
     uint8_t clrbg = NORM;
-    char* level1string[] = { "Set","Alarm","Klok" };
+    char* level1string[] = { "Run","Alarm","Klok" };
     
     uView.setFontType(1);     // set font type 0, please see declaration in MicroView.cpp
 
