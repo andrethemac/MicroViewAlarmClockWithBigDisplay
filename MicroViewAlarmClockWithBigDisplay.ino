@@ -71,6 +71,7 @@ boolean B_set = false;
 boolean C_set = false;
 //end rotary encoder variables ###
 
+// menu 
 uint8_t state = 0;
 uint8_t menuLevel = 0;
 uint8_t menuLevelState = 0;
@@ -83,6 +84,7 @@ enum menuTop {
 };
 
 // menu level 1
+// alarm
 uint8_t menuAlarmSize = 4;
 char* menuAlarmString[] = { "alarm","uur","minuut","aan/uit" };
 enum menuAlarm {
@@ -91,7 +93,8 @@ enum menuAlarm {
   alarmAanUit,
   return1up
 };
-// menu level 2
+// menu level 1
+// clock
 uint8_t menuClockSize = 6;
 char* menuClockString[] = { "klok","uur","minuut","dag","maand","jaar" };
 enum menuClock {
@@ -102,12 +105,8 @@ enum menuClock {
   clockAdjustYear,
   return1up2
 };
-// menu level 3
-//uint8_t menuDemoSize = 1;
-//enum menuDemo {
-//  showDemo
-//};
 
+//clear the display
 boolean displayClear = false;
 boolean displayCleared = false;
 
@@ -129,6 +128,7 @@ void doEncoderB();
 */
 
 /* soundstuff */
+//sound is controlled thru serial (pin 9 RX and 10 TX)
 uint8_t mp3 = 1;
 boolean mp3playing = false;
 
@@ -234,7 +234,7 @@ void loop() {
   if ( clockAlarmAdjust.released() ) {
     state++;
     encoderPos = 0;
-    state %= menuSize;
+//    state %= menuSize;
     menuLevel = menuLevelState;
     displayClear = !displayCleared;
     lastaction = now();
@@ -248,6 +248,11 @@ void loop() {
   }
 
   lightBar(lightBarState);
+
+  /* adjust time at least once every 2 hours */
+  if ( ( hour() / 2 ) == 0 ) {
+    adjustTime( RTC.get() ); 
+  }
 
   if ( (now() - lastaction) > 30 ) {
     lastaction = now();
@@ -270,6 +275,7 @@ void loop() {
       showMenuLevel();
       break;
     default:
+      state = 0;
       displayTime();
       displayTimeLC();
     };
