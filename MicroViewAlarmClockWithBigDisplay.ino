@@ -8,6 +8,7 @@
 #include <Time.h>         //http://www.arduino.cc/playground/Code/Time  
 #include <Wire.h>         //http://arduino.cc/en/Reference/Wire (included with Arduino IDE)
 #include <math.h>
+#include <avr/wdt.h>
 
 // #define alarmPin  0  // alarm off pin
 #define alarmPin  5  // alarm off pin
@@ -83,8 +84,7 @@ enum menuTop {
 
 // menu level 1
 uint8_t menuAlarmSize = 4;
-char* menuAlarmString[] = { "alarm","uur","alarm","minuut","alarm","aan/uit","klok","run" };
-uint8_t menuAlarmTeller[] = {5,3,5,6,5,7,4,3};
+char* menuAlarmString[] = { "alarm","uur","minuut","aan/uit" };
 enum menuAlarm {
   alarmAdjustHour,
   alarmAdjustMinute,
@@ -93,6 +93,7 @@ enum menuAlarm {
 };
 // menu level 2
 uint8_t menuClockSize = 6;
+char* menuClockString[] = { "klok","uur","minuut","dag","maand","jaar" };
 enum menuClock {
   clockAdjustHour,
   clockAdjustMinute,
@@ -132,6 +133,8 @@ uint8_t mp3 = 1;
 boolean mp3playing = false;
 
 void setup() {
+  /* enable watchdog */
+  wdt_enable(WDTO_8S);
   /*debug stuff */
 //  Serial.begin(9600);
   Serial.begin(38400);
@@ -141,11 +144,11 @@ void setup() {
   if (timeStatus() != timeSet) {
     Serial.println("Unable to sync with the RTC");
     // set default time
-    setTime(10, 10, 30, 10, 10, 2016);
+    setTime(10, 10, 30, 06, 12, 2016);
   } else {
     Serial.println("RTC has set the system time");
   }
-
+  /* end setup ds3231 */
   
   /* setup encoder */
   pinMode(encoderPinA, INPUT_PULLUP);
@@ -160,6 +163,7 @@ void setup() {
   /* adafruit neopixel */
   strip.begin();
   strip.show(); // Initialize all pixels to off
+  /* end adafruit neopixel */
 
   /* Setup microview */
   uView.begin();	// begin of MicroView
@@ -167,26 +171,39 @@ void setup() {
   uView.display();	// display the content in the buffer memory, by default it is the MicroView logo
   delay(700);
   uView.clear(PAGE);	// erase the memory buffer, when next uView.display() is called, the OLED will be cleared.
+  /* end setup microview */
 
-
+  /* set alarm to default */
   alarm1Time = SECS_PER_HOUR * 10 + SECS_PER_MIN * 11;
   alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
   Alarm.disable(alarmID);
   AlarmOnOff = false;
+  /* end alarm */
 
-  // setup ledarray
+  /* setup led display */
   lc1.shutdown(0, false);
   lc1.setIntensity(0, 15);
   lc1.clearDisplay(0);
+  /* end setup led display */
 
-  // timer (halfsecond)
+  /* timer (halfsecond) blink */
   Timer1.initialize(500000UL);
   Timer1.attachInterrupt(halfSecondBlink);
+  /* end blink */
 
+  /*  */
   clocksplash();
+
+  /* stop the music */
+  Serial.print("O");
+  Serial.println();
+  mp3playing = false;
+
 }
 
 void loop() {
+  /* reset the watchdog */
+  wdt_reset();
 /*
   Serial.print(alarmState);
   Serial.print(" ");
@@ -229,19 +246,7 @@ void loop() {
     alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
     uView.invert(false);
   }
-/*  
-  if(alarmState == true ) {   // && AlarmOnOff == true ){
-//    displayClear = !displayCleared;
-  }
-*/  
-/*
-  if ( alarmState == true) {
-    displayClear = !displayCleared;
-    lightBarOff();
-    uView.invert(false);
-    alarmState = false;
-  }
-*/
+
   lightBar(lightBarState);
 
   if ( (now() - lastaction) > 30 ) {
@@ -278,7 +283,7 @@ void loop() {
       Alarm.free(alarmID);
       alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
       encoderPos = 0;
-      displayAdjust("Alarm",5,"uur",3);
+      displayAdjust("Alarm","uur");
       displayAlarmLC();
       break;
     case alarmAdjustMinute:
@@ -287,18 +292,18 @@ void loop() {
       Alarm.free(alarmID);
       alarmID = Alarm.alarmRepeat(alarm1Time,lightBarOn);
       encoderPos = 0;
-      displayAdjust("Alarm",5,"minuut",6);
+      displayAdjust("Alarm","minuut");
       displayAlarmLC();
       break;
     case alarmAanUit:
       lastaction = now();
       encoderPos = constrain(encoderPos,0,1);
       if ( encoderPos == 0 ){
-        displayAdjust("AAN",3,"   ",3);
+        displayAdjust("AAN","   ");
         AlarmOnOff = true;
         Alarm.enable(alarmID);
       } else {
-        displayAdjust("   ",3,"UIT",3);
+        displayAdjust("   ","UIT");
         AlarmOnOff = false;
         Alarm.disable(alarmID);
       }
@@ -318,47 +323,23 @@ void loop() {
     };
     break;
   case 2: // set the clock
-    menuSize = 6;
+    menuSize = menuClockSize;
+    Serial.println(sizeof(menuClock));
     switch(state){
     case clockAdjustHour:
-      RTC.set(now());
-      adjustTime( SECS_PER_HOUR * encoderPos);
-      encoderPos = 0;
-      displayAdjust("Klok",4,"uur",3);
-      displayTimeLC();
-      lastaction = now();
+      clockAdjust(state, SECS_PER_HOUR * encoderPos);
       break;
     case clockAdjustMinute:
-      RTC.set(now());
-      adjustTime( SECS_PER_MIN * encoderPos);
-      encoderPos = 0;
-      displayAdjust("Klok",4,"Minuut",6);
-      displayTimeLC();
-      lastaction = now();
+      clockAdjust(state, SECS_PER_MIN * encoderPos);
       break;
     case clockAdjustDay:
-      adjustTime( SECS_PER_DAY * encoderPos);
-      RTC.set(now());
-      encoderPos = 0;
-      displayAdjust("Klok",4,"Dag",3);
-      displayDateLC(day());
-      lastaction = now();
+      clockAdjust(state, SECS_PER_DAY * encoderPos);
       break;
     case clockAdjustMonth:
-      RTC.set(now());
-      adjustTime( SECS_PER_DAY * daysInMonth() * encoderPos);
-      encoderPos = 0;
-      displayAdjust("Klok",4,"Maand",5);
-      displayDateLC(month());
-      lastaction = now();
+      clockAdjust(state,  SECS_PER_DAY * daysInMonth() * encoderPos);
       break;
     case clockAdjustYear:
-      RTC.set(now());
-      adjustTime( SECS_PER_YEAR * encoderPos);
-      encoderPos = 0;
-      displayAdjust("Klok",4,"Jaar",4);
-      displayDateLC(year());
-      lastaction = now();
+      clockAdjust(state, SECS_PER_YEAR * encoderPos);
       break;
     case return1up2:
       menuLevel = 0;
@@ -380,11 +361,20 @@ void loop() {
   }
 }
 
+void clockAdjust(uint8_t moment, long adjustment) {
+  adjustTime( adjustment );
+  encoderPos = 0;
+  displayAdjust(menuClockString[0],menuClockString[moment+1]);
+  displayTimeLC();
+  lastaction = now();
+}
+
 
 /* blink double point ever half second */
 /* interrupt routine */
 void halfSecondBlink() {
   dp = !dp;
+//  if (timeStatus() != timeSet) {  adjustTime(dp); }
 }
 
 /* neopixel display control */
@@ -537,15 +527,14 @@ void showMenuLevel() {
     uint8_t clrfg = 0;
     uint8_t clrbg = NORM;
     char* level1string[] = { "Set","Alarm","Klok" };
-    int level1teller[] = {3,5,4};
     
     uView.setFontType(1);     // set font type 0, please see declaration in MicroView.cpp
 
     for ( uint8_t x = 0; x <= menuTopSize; x++) {
       menuLevelState = encoderPos;
       if ( encoderPos == x ) { clrfg = BLACK; } else { clrfg = WHITE; };
-      st = (LCDWIDTH - (level1teller[x] * uView.getFontWidth())) / 2;
-      for ( uint8_t y = 0; y < level1teller[x]; y++ ) {
+      st = (LCDWIDTH - (strlen(level1string[x]) * uView.getFontWidth())) / 2;
+      for ( uint8_t y = 0; y < strlen(level1string[x]); y++ ) {
         uView.drawChar(st, x * uView.getFontHeight(), level1string[x][y], clrfg, clrbg);
         st += uView.getFontWidth();
       }
@@ -554,18 +543,20 @@ void showMenuLevel() {
   }
 }
 
-void displayAdjust(const char* messageR1, int messageLengthR1, const char* messageR2, int messageLengthR2) {
+void displayAdjust(const char* messageR1, const char* messageR2) {
   if ( displayClear != displayCleared ) {
     uView.clear(PAGE);
     uView.display();
     displayClear = displayCleared;
   }
   uView.setFontType(1);     // set font type 0, please see declaration in MicroView.cpp
-  messageLengthR1 *= uView.getFontWidth();
+//  messageLengthR1 *= uView.getFontWidth();
+  uint8_t messageLengthR1 = strlen(messageR1) * uView.getFontWidth();
   messageLengthR1 = max(0, (LCDWIDTH - messageLengthR1) / 2);
   uView.setCursor(messageLengthR1, 8);
   uView.print(messageR1);
-  messageLengthR2 *= uView.getFontWidth();
+//  messageLengthR2 *= uView.getFontWidth();
+  uint8_t messageLengthR2 = strlen(messageR2) * uView.getFontWidth();
   messageLengthR2 = max(0, (LCDWIDTH - messageLengthR2) / 2);
   uView.setCursor(messageLengthR2, 24);
   uView.print(messageR2);
