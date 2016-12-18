@@ -12,9 +12,11 @@
 
 // #define alarmPin  0  // alarm off pin
 #define alarmPin  5  // alarm off pin
-bool alarmState = true;
-bool AlarmOnOff = true; // on is true, off is false
+bool AlarmOnOff = false; // true is on, false is off
 int alarmID = 0;
+
+//snooze
+bool snoozeOnOff = false;   // true is snoozing, false is off
 
 time_t alarm1Time;
 
@@ -233,11 +235,18 @@ void loop() {
     lastaction = now();
   }
   if ( alarmButton.released() ) {
-    alarmState = false;
-    lightBarOff();
-    Alarm.free(alarmID);
-    alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
-    uView.invert(false);
+    if(AlarmOnOff == true) {
+      lightBarOff();
+      Alarm.free(alarmID);
+      alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
+      uView.invert(false);
+    } 
+    if(snoozeOnOff == true) {
+      lightBarOff();
+    }
+    if(lightBarState == false) {
+      lightBarDown();
+    }
   }
 
   lightBar(lightBarState);
@@ -377,7 +386,7 @@ void lightBar(bool lightBarState) {
     if ( actMin != prevMin ) {
       prevMin = actMin;
       if ( actMin % 10 == 0) {
-        if(lightBarDirection) {
+        if(lightBarDirection == false ) {
           lightBarValue++;
         } else {
           lightBarValue--;
@@ -427,12 +436,15 @@ void lightBarUp() {
 void lightBarDown() {
   lightBarState = true;
   lightBarValue = 255;
-  lightBarDirection = true;  
+  lightBarDirection = true;
+  snoozeOnOff = true;
 }
 
 void lightBarOff() {
   lightBarState = false;
   lightBarValue = 0;
+  lightBarDirection = false;
+  snoozeOnOff = false;
   uView.invert(false);
   Serial.print("O");
   Serial.println();
@@ -470,20 +482,20 @@ void doEncoderB() {
 
 long unsigned int daysInMonth(int monthToReturn ) {
   switch (monthToReturn) {
-    case (4):
-    case (6):
-    case (9):
-    case (11):
+    case (4):  //april
+    case (6):  //june
+    case (9):  //septembre
+    case (11): //novembre
       return 30;
       break;
-    case (2):
+    case (2): //februar
       if (year() / 4) {
-        return 29;
+        return 29;  
       } else {
         return 28;
       }
       break;
-    default:
+    default: // every other month
       return 31;
   }
 }
@@ -566,27 +578,22 @@ void displayTime() {
     displayClear = displayCleared;
   }
   uView.setFontType(0);     // set font type 0, please see declaration in MicroView.cpp
-  if ( AlarmOnOff == true) {
-    time_t showalarm = 0;
-    showalarm = Alarm.read(alarmID);
+  if ( ( AlarmOnOff == true ) || ( snoozeOnOff == true ) ) {
     uView.setCursor(0, 0);
     uView.setFontType(0);
-    uView.print("Alarm");
-    uView.print(hour(showalarm) / 10);
-    uView.print(hour(showalarm) % 10);
-    uView.print(":");
-    uView.print((minute(showalarm) / 10));
-    uView.print((minute(showalarm) % 10));
+    if (AlarmOnOff == true ) {
+      time_t showalarm = 0;
+      showalarm = Alarm.read(alarmID);
+      uView.print("Alarm");
+      uView.print(hour(showalarm) / 10);
+      uView.print(hour(showalarm) % 10);
+      uView.print(":");
+      uView.print((minute(showalarm) / 10));
+      uView.print((minute(showalarm) % 10));
+    } else {
+      uView.print(" snoozing ");
+    }
     uViewdisplayClock();
-    /*
-    uView.print("   Alarm   ");
-    uView.setFontType(2);
-    uView.setCursor((LCDWIDTH - (uView.getFontWidth()*4))/2,(LCDHEIGHT - (uView.getFontHeight()))/2);
-    uView.print(hour(showalarm) / 10);
-    uView.print(hour(showalarm) % 10);
-    uView.print((minute(showalarm) / 10));
-    uView.print((minute(showalarm) % 10));
-    */
   } else {
     uView.setCursor(2, 0);
     if ( day() < 10 ) {
@@ -594,7 +601,9 @@ void displayTime() {
     }
     uView.print(day());
     uView.print("/");
-    //uView.print(monthShortStr(month()));
+    if ( month() < 10 ) {
+      uView.print("0");
+    }
     uView.print(month());
     uView.print("/");
     uView.print(year());
@@ -625,7 +634,8 @@ void uViewdisplayClock() {
     uView.pixel(clocksizeX + hourx, clocksizeY + houry);
   }
 
-  degresshour = (((hour() * 360) / 12) + 270) * (PI / 180);
+  //degresshour = (((hour() * 360) / 12) + 270) * (PI / 180);
+  degresshour = (((hour() * 360) / 12) + (minute() / 2) + 270) * (PI / 180);
   degressmin = (((minute() * 360) / 60) + 270) * (PI / 180);
   degresssec = (((second() * 360) / 60) + 270) * (PI / 180);
 
