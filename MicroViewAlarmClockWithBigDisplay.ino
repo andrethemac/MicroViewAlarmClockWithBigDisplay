@@ -291,7 +291,7 @@ void loop() {
       Alarm.free(alarmID);
       alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
       encoderPos = 0;
-      displayAdjust("Alarm","uur");
+      displayAdjust("Alarm","uur", alarm1Time);
       displayAlarmLC();
       break;
     case alarmAdjustMinute:
@@ -300,7 +300,7 @@ void loop() {
       Alarm.free(alarmID);
       alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
       encoderPos = 0;
-      displayAdjust("Alarm","minuut");
+      displayAdjust("Alarm","minuut", alarm1Time);
       displayAlarmLC();
       break;
     case alarmAanUit:
@@ -532,6 +532,54 @@ void showMenuLevel0() {
     uView.display();
   }
 }
+
+void displayAdjust(const char* messageR1, const char* messageR2, time_t time2show) {
+  if ( displayClear != displayCleared ) {
+    uView.clear(PAGE);
+    uView.display();
+    displayClear = displayCleared;
+  }
+  uView.setFontType(1);     // set font type 0, please see declaration in MicroView.cpp
+
+  uView.setCursor(max(0, (LCDWIDTH - (strlen(messageR1) * uView.getFontWidth())) / 2), 0);
+  uView.print(messageR1);
+
+  uView.setCursor(max(0, (LCDWIDTH - (strlen(messageR2) * uView.getFontWidth())) / 2), uView.getFontHeight());
+  uView.print(messageR2);
+
+  uView.setFontType(2);
+  uView.setCursor((LCDWIDTH - (uView.getFontWidth() * 5)) / 2, LCDHEIGHT - uView.getFontHeight());
+  if ( hour(time2show) < 10 ) {
+    uView.print("0");
+  }
+  uView.print(hour(time2show));
+  uView.print(" ");
+  if ( minute(time2show) < 10 ) {
+    uView.print("0");
+  }
+  uView.print(minute(time2show));
+  /*
+  uView.print(":");
+  if ( second(time2show) < 10 ) {
+    uView.print("0");
+  }
+  uView.print(second(time2show));
+  */
+  /*
+  uView.print(" ");
+  uView.setCursor(0,uView.getLCDHeight() - uView.getFontHeight());
+  uView.print(day(time2show));
+  uView.print("/");
+  uView.print(month(time2show));
+  uView.print("/");
+  uView.print(year(time2show));
+  uView.print(" ");
+  */
+
+  uView.display();
+  
+}
+
 
 void displayAdjust(const char* messageR1, const char* messageR2) {
   if ( displayClear != displayCleared ) {
