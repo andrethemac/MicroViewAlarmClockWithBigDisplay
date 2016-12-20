@@ -12,7 +12,7 @@
 
 // #define alarmPin  0  // alarm off pin
 #define alarmPin  5  // alarm off pin
-bool AlarmOnOff = false; // true is on, false is off
+bool AlarmOnOff = false; // true is on, alarm is enabled, false is alarm is disabled
 int alarmID = 0;
 
 //snooze
@@ -99,7 +99,10 @@ enum menuAlarm {
 // menu level 1
 // clock
 uint8_t menuClockSize = 6;
-char* menuClockString[] = { "klok","uur","minuut","dag","maand","jaar" };
+bool timeSetMode = false;
+time_t newTime;
+char menuClockStringTitle = "klok";
+char* menuClockString[] = { "uur","minuut","dag","maand","jaar" };
 enum menuClock {
   clockAdjustHour,
   clockAdjustMinute,
@@ -291,8 +294,8 @@ void loop() {
       Alarm.free(alarmID);
       alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
       encoderPos = 0;
-      displayAdjust("Alarm","uur", alarm1Time);
-      displayAlarmLC();
+      displayAdjust("Alarm","uur", alarm1Time,state);
+      displayTimeLC();
       break;
     case alarmAdjustMinute:
       lastaction = now();
@@ -300,18 +303,18 @@ void loop() {
       Alarm.free(alarmID);
       alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
       encoderPos = 0;
-      displayAdjust("Alarm","minuut", alarm1Time);
-      displayAlarmLC();
+      displayAdjust("Alarm","minuut", alarm1Time, state);
+      displayTimeLC();
       break;
     case alarmAanUit:
       lastaction = now();
       encoderPos = constrain(encoderPos,0,1);
       if ( encoderPos == 0 ){
-        displayAdjust("AAN","   ");
+        displayAdjust("Alarm","AAN",alarm1Time,0);
         AlarmOnOff = true;
         Alarm.enable(alarmID);
       } else {
-        displayAdjust("   ","UIT");
+        displayAdjust("Alarm","UIT",alarm1Time,0);
         AlarmOnOff = false;
         Alarm.disable(alarmID);
       }
@@ -330,24 +333,30 @@ void loop() {
   case 2: // set the clock
     menuSize = menuClockSize;
     Serial.println(sizeof(menuClock));
+    if ( timeSetMode == false ) {
+      newTime = now();
+      timeSetMode = true;
+    }
     switch(state){
     case clockAdjustHour:
-      clockAdjust(state, SECS_PER_HOUR * encoderPos);
+      newTime = clockAdjust(state, SECS_PER_HOUR * encoderPos, newTime);
       break;
     case clockAdjustMinute:
-      clockAdjust(state, SECS_PER_MIN * encoderPos);
+      newTime = clockAdjust(state, SECS_PER_MIN * encoderPos, newTime);
       break;
     case clockAdjustDay:
-      clockAdjust(state, SECS_PER_DAY * encoderPos);
+      newTime = clockAdjust(state, SECS_PER_DAY * encoderPos, newTime);
       break;
     case clockAdjustMonth:
-      clockAdjust(state,  SECS_PER_DAY * (daysInMonth(month()) * encoderPos));
+      newTime = clockAdjust(state,  SECS_PER_DAY * (daysInMonth(month()) * encoderPos), newTime);
       break;
     case clockAdjustYear:
-      clockAdjust(state, SECS_PER_YEAR * encoderPos);
+      newTime = clockAdjust(state, SECS_PER_YEAR * encoderPos, newTime);
       break;
     case return1up2:
-      RTC.set(now());
+      RTC.set(newTime);
+      setTime(newTime);
+      timeSetMode = false;
     default:
       menuLevelState = 0;
       menuLevel = 0;
@@ -363,12 +372,14 @@ void loop() {
   }
 }
 
-void clockAdjust(uint8_t moment, long adjustment) {
-  adjustTime( adjustment );
+time_t clockAdjust(uint8_t moment, long adjustment, time_t time2set) {
+  //time2set.adjustTime( adjustment );
+  time2set += adjustment ;
   encoderPos = 0;
-  displayAdjust(menuClockString[0],menuClockString[moment+1]);
+  displayAdjust(menuClockStringTitle,menuClockString[moment],time2set,moment);
   displayTimeLC();
   lastaction = now();
+  return time2set;
 }
 
 
@@ -533,7 +544,7 @@ void showMenuLevel0() {
   }
 }
 
-void displayAdjust(const char* messageR1, const char* messageR2, time_t time2show) {
+void displayAdjust(const char* messageR1, const char* messageR2, time_t time2show, int showTimeDate) {
   if ( displayClear != displayCleared ) {
     uView.clear(PAGE);
     uView.display();
@@ -548,16 +559,17 @@ void displayAdjust(const char* messageR1, const char* messageR2, time_t time2sho
   uView.print(messageR2);
 
   uView.setFontType(2);
-  uView.setCursor((LCDWIDTH - (uView.getFontWidth() * 5)) / 2, LCDHEIGHT - uView.getFontHeight());
-  if ( hour(time2show) < 10 ) {
-    uView.print("0");
-  }
-  uView.print(hour(time2show));
-  uView.print(" ");
-  if ( minute(time2show) < 10 ) {
-    uView.print("0");
-  }
-  uView.print(minute(time2show));
+  if(showTimeDate < 2 ) {
+    uView.setCursor((LCDWIDTH - (uView.getFontWidth() * 5)) / 2, LCDHEIGHT - uView.getFontHeight());
+    if ( hour(time2show) < 10 ) {
+      uView.print("0");
+    }
+    uView.print(hour(time2show));
+    uView.print(" ");
+    if ( minute(time2show) < 10 ) {
+      uView.print("0");
+    }
+    uView.print(minute(time2show));
   /*
   uView.print(":");
   if ( second(time2show) < 10 ) {
@@ -565,16 +577,27 @@ void displayAdjust(const char* messageR1, const char* messageR2, time_t time2sho
   }
   uView.print(second(time2show));
   */
-  /*
-  uView.print(" ");
-  uView.setCursor(0,uView.getLCDHeight() - uView.getFontHeight());
-  uView.print(day(time2show));
-  uView.print("/");
-  uView.print(month(time2show));
-  uView.print("/");
-  uView.print(year(time2show));
-  uView.print(" ");
-  */
+  } else {
+    unsigned int value2show;
+    switch (showTimeDate) {
+      case 2:
+        uView.setCursor((LCDWIDTH - (uView.getFontWidth() * 2)) / 2, LCDHEIGHT - uView.getFontHeight());
+        value2show = day(time2show);
+        break;
+      case 3:
+        uView.setCursor((LCDWIDTH - (uView.getFontWidth() * 2)) / 2, LCDHEIGHT - uView.getFontHeight());
+        value2show = month(time2show);
+        break;
+      case 4:
+        uView.setCursor((LCDWIDTH - (uView.getFontWidth() * 4)) / 2, LCDHEIGHT - uView.getFontHeight());
+        value2show = year(time2show);
+        break;
+    }
+    if ( value2show < 10 ) {
+      uView.print("0");
+    }
+    uView.print(value2show);
+  }
 
   uView.display();
   
