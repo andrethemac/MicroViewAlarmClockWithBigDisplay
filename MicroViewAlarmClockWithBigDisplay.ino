@@ -18,6 +18,14 @@ int alarmID = 0;
 //snooze
 bool snoozeOnOff = false;   // true is snoozing, false is off
 
+enum alarmIsNowValues {
+  off,
+  alarming,
+  snoozing,
+  alarmEnabeld
+};
+uint8_t alarmIsNow = off;
+
 time_t alarm1Time;
 
 /* neopixel daylight display */
@@ -238,20 +246,20 @@ void loop() {
     lastaction = now();
   }
   if ( alarmButton.released() ) {
-    if(AlarmOnOff == true) {
-      lightBarOff();
-      Alarm.free(alarmID);
-      alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
-      uView.invert(false);
-    } 
-    if(snoozeOnOff == true) {
-      lightBarOff();
-    }
-    if(lightBarState == false) {
-      lightBarDown();
-    }
-  }
-
+    switch (alarmIsNow) {
+        case off:
+          lightBarDown();
+          break;
+        case alarming:
+          Alarm.free(alarmID);
+          alarmID = Alarm.alarmRepeat(alarm1Time,lightBarUp);
+          uView.invert(false);
+        case snoozing:
+          lightBarOff();
+          break;
+      };
+  };
+  //Serial.println(alarmIsNow);
   lightBar(lightBarState);
 
   /* adjust time at least once every 2 hours */
@@ -432,6 +440,7 @@ void lightBar(bool lightBarState) {
 }
 
 void lightBarUp() {
+  alarmIsNow = alarming;
   lightBarState = true;
   lightBarValue = 0;
   lightBarDirection = false;  
@@ -445,6 +454,7 @@ void lightBarUp() {
   mp3playing = true;
 }
 void lightBarDown() {
+  alarmIsNow = snoozing;
   lightBarState = true;
   lightBarValue = 255;
   lightBarDirection = true;
@@ -452,6 +462,7 @@ void lightBarDown() {
 }
 
 void lightBarOff() {
+  alarmIsNow = off;
   lightBarState = false;
   lightBarValue = 0;
   lightBarDirection = false;
@@ -649,40 +660,38 @@ void displayTime() {
     displayClear = displayCleared;
   }
   uView.setFontType(0);     // set font type 0, please see declaration in MicroView.cpp
-  if ( ( AlarmOnOff == true ) || ( snoozeOnOff == true ) ) {
-    uView.setCursor(0, 0);
-    uView.setFontType(0);
-    if (AlarmOnOff == true ) {
-      time_t showalarm = 0;
-      showalarm = Alarm.read(alarmID);
+  uView.setCursor(0, 0);
+  switch (alarmIsNow) {
+    case off:
+    case alarming:
+    if ( AlarmOnOff == true ) {
       uView.print("Alarm");
-      uView.print(hour(showalarm) / 10);
-      uView.print(hour(showalarm) % 10);
+      uView.print(hour(Alarm.read(alarmID)) / 10);
+      uView.print(hour(Alarm.read(alarmID)) % 10);
       uView.print(":");
-      uView.print((minute(showalarm) / 10));
-      uView.print((minute(showalarm) % 10));
+      uView.print((minute(Alarm.read(alarmID)) / 10));
+      uView.print((minute(Alarm.read(alarmID)) % 10));
     } else {
+      uView.setCursor(2, 0);
+      if ( day() < 10 ) {
+        uView.print("0");
+      }
+      uView.print(day());
+      uView.print("/");
+      if ( month() < 10 ) {
+        uView.print("0");
+      }
+      uView.print(month());
+      uView.print("/");
+      uView.print(year());
+    }
+    break;
+    case snoozing:
       uView.print(" snoozing ");
-    }
-    uViewdisplayClock();
-  } else {
-    uView.setCursor(2, 0);
-    if ( day() < 10 ) {
-      uView.print("0");
-    }
-    uView.print(day());
-    uView.print("/");
-    if ( month() < 10 ) {
-      uView.print("0");
-    }
-    uView.print(month());
-    uView.print("/");
-    uView.print(year());
-    uViewdisplayClock();
+    break;
   }
-  
+  uViewdisplayClock();
   uView.display();      // display the memory buffer drawn
-
 }
 
 void uViewdisplayClock() {
@@ -741,11 +750,10 @@ void displayTimeLC() {
   lc1.setDigit(0, 3, (minute() % 10), false);
 }
 void displayAlarmLC() {
-  time_t showalarm = Alarm.read(alarmID);
-  lc1.setDigit(0, 0, hour(showalarm) / 10, false);
-  lc1.setDigit(0, 1, hour(showalarm) % 10, dp);
-  lc1.setDigit(0, 2, (minute(showalarm) / 10), dp);
-  lc1.setDigit(0, 3, (minute(showalarm) % 10), false);
+  lc1.setDigit(0, 0, hour(Alarm.read(alarmID)) / 10, false);
+  lc1.setDigit(0, 1, hour(Alarm.read(alarmID)) % 10, dp);
+  lc1.setDigit(0, 2, (minute(Alarm.read(alarmID)) / 10), dp);
+  lc1.setDigit(0, 3, (minute(Alarm.read(alarmID)) % 10), false);
 }
 
 void displayDateLC(int dateToShow) {
